@@ -1,0 +1,150 @@
+version: "2"
+
+networks:
+  exedio:
+    external: false
+volumes:
+  gitea:
+    driver: local
+services:
+  gitea:
+    image: gitea/gitea:latest
+    container_name: gitea
+    environment:
+      - USER_UID=1000
+      - USER_GID=1000
+      - ROOT_URL="http://gitea.exedio.com.br/"
+    restart: always
+    networks:
+      - exedio
+    volumes:
+      - /data/gitea:/data
+    ports:
+      - "8000:3000"
+      - "22:22"
+    depends_on:
+      - db
+  sonarqube:
+    image: sonarqube:6.4
+    container_name: sonarqube
+    ports:
+      - "9000:9000"
+    networks:
+      - exedio
+    environment:
+      - SONARQUBE_JDBC_URL=jdbc:postgresql://postgres:5432/sonar
+    volumes:
+      - /data/sonarqube/sonarqube_conf:/opt/sonarqube/conf
+      - /data/sonarqube/sonarqube_data:/opt/sonarqube/data
+      - /data/sonarqube/sonarqube_extensions:/opt/sonarqube/extensions
+      - /data/sonarqube/sonarqube_bundled-plugins:/opt/sonarqube/lib/bundled-plugins
+    depends_on:
+      - postgres
+  postgres:
+    image: postgres
+    container_name: postgres
+    networks:
+      - exedio
+    environment:
+      - POSTGRES_USER=sonar
+      - POSTGRES_PASSWORD=sonar
+    volumes:
+      - /data/postgres/postgresql:/var/lib/postgresql
+      # This needs explicit mapping due to https://github.com/docker-library/postgres/blob/4e48e3228a30763913ece952c611e5e9b95c8759/Dockerfile.template#L52
+      - /data/postgres/postgresql_data:/var/lib/postgresql/data
+  db:
+    image: mysql:5.7
+    restart: always
+    container_name: bd_mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=gitea
+      - MYSQL_USER=gitea
+      - MYSQL_PASSWORD=gitea
+      - MYSQL_DATABASE=gitea
+    networks:
+      - exedio
+    ports:
+      - "3306:3306"
+    volumes:
+      - /data/mysql:/var/lib/mysql
+  jenkins:
+    image: jenkins/jenkins:lts
+    restart: always
+    networks:
+      - exedio
+    links:
+      - db
+      - gitea
+    container_name: jenkins
+    user: jenkins
+    volumes:
+      - /data/jenkins:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - JENKINS_HOST_HOME:/data/jenkins
+      - JENKINS_PASSWORD:marco@1020
+      #- JENKINS_OPTS:--httpListenAddress=127.0.0.1
+    ports:
+      - "8080:8080"
+      - "5000:5000"
+      - "50000:50000"
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    restart: always
+    networks:
+      - exedio
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /data/nginx:/code
+      - /data/default.conf:/etc/nginx/conf.d/default.conf
+    links:
+      - jenkins
+      - gitea
+#      - hybris
+#hybris:
+#    image: stefanlehmann/hybris-base-image:latest
+#    restart: always
+#    container_name: hybris-exedio
+#    networks:
+#      - exedio
+#    ports:
+#      - "9001:9001"
+#      - "9002:9002"
+#    volumes:
+#      - /data/hybris:/home/hybris
+#    links:
+#      - jenkins
+#      - gitea
+#      - sonarqube
+#  phpmyadmin:
+#    image: phpmyadmin/phpmyadmin
+#    container_name: phpmyadmin
+#    networks:
+#      - exedio
+#    links:
+#      - db
+#    environment:
+#      - MYSQL_ROOT_PASSWORD=gitea
+#      - MYSQL_USER=gitea
+#      - MYSQL_PASSWORD=gitea
+#      - PMA_ARBITRARY=1
+#    restart: always
+#    ports:
+#      - 8008:80
+#    volumes:
+#      - /data/phpmyadmin
+    #hybris:
+    #image: stefanlehmann/hybris-base-image:latest
+    #container_name: hybris
+    #restart: always
+    #networks:
+      #- gitea
+    #ports:
+      #- "9005:9001"
+      #- "9006:9002"
+      #- "9007:8000"
+    #volumes:
+      #- /data/hybris:/home/hybris
